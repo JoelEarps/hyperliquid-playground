@@ -55,11 +55,9 @@ pub type MarketIndexMap = HashMap<String, MarketIndexData>;
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct MarketIndexData {
-    market_index: String,
+    pub market_index: String,
     token_id: H128,
 }
-
-pub(crate) fn create_order_book(){}
 
 #[cfg(test)]
 mod tests {
