@@ -1,14 +1,17 @@
+use std::collections::HashMap;
+
+use ethers::types::H128;
 // Spot Meta is not an availble type from the SDK maybe create a patch, created patch, maybe take this forward? and recommend as a PR.
 use hyperliquid_rust_sdk::SpotMeta;
 use crate::hyperliquid_info_client::hyperliquid_types::RequiredTokenInfo;
-
 
 /// Responsible for generating the data in a required format for use within the OMS system
 /// It takes the current spot meta data extracted from the info_client.spot_meta() method call
 /// Gathers each item required from token meta data and use that to create and validate the indexes in the hyperliquid universe vector.
 /// 
 /// # Errors
-pub(crate) fn extract_market_index(spot_meta: SpotMeta) {
+pub(crate) fn extract_market_index(spot_meta: SpotMeta) -> MarketIndexMap {
+    let mut market_data_hashmap: MarketIndexMap = HashMap::new();
      // Start with Token structure, extract name, token address and index ✅
      let spot_token_info: Vec<RequiredTokenInfo> = spot_meta.tokens.into_iter().map(|token_info| {
         RequiredTokenInfo {
@@ -32,19 +35,37 @@ pub(crate) fn extract_market_index(spot_meta: SpotMeta) {
             quote == spot_token.index
         });
 
-        match (Some(base_match), Some(quote_match)) {
-            (Some(valid_base_match), Some(valid_quote_match)) => println!("{:?} ---- {:?}", valid_base_match, valid_quote_match),
+        // Would it be better to assert on them here?
+        match (&base_match, &quote_match) {
+            (Some(valid_base_match), Some(valid_quote_match)) => {
+                println!("{:?} ---- {:?}, with market index name {}", valid_base_match, valid_quote_match, uni_item.name);
+                let key = format!("{}_{}", valid_base_match.name, valid_quote_match.name);
+                market_data_hashmap.insert(key, MarketIndexData { market_index: uni_item.name, token_id: valid_base_match.token_id });
+            }
             (Some(_), None) => println!("Error no quote to match"),
             (None, Some(_)) => println!("Error no base to match"),
             (None, None) => println!("Error")
-        }
+        }   
     }
+
+    market_data_hashmap
 }
+
+pub type MarketIndexMap = HashMap<String, MarketIndexData>;
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct MarketIndexData {
+    market_index: String,
+    token_id: H128,
+}
+
+pub(crate) fn create_order_book(){}
 
 #[cfg(test)]
 mod tests {
 
     use super::*;
+    use std::str::FromStr;
 
     const TEST_FIXTURE : &str = r#"
     {
@@ -145,7 +166,16 @@ mod tests {
     #[test]
     fn check_for_base_quote_match() {
         let valid_test_data: SpotMeta = serde_json::from_str(TEST_FIXTURE).unwrap();
-        let _ = extract_market_index(valid_test_data);
+        let test_data_mapping = extract_market_index(valid_test_data);
+        assert_eq!(test_data_mapping.len(), 4);
 
+        let expected_hashmap = MarketIndexMap::from([
+            ("PURR_USDC".to_string(), MarketIndexData { market_index: "PURR/USDC".to_string(), token_id: H128::from_str("0xc1fb593aeffbeb02f85e0308e9956a90").unwrap() }),
+            ("HFUN_USDC".to_string(), MarketIndexData { market_index: "@1".to_string(), token_id: H128::from_str("0xbaf265ef389da684513d98d68edf4eae").unwrap() }),
+            ("LICK_USDC".to_string(), MarketIndexData { market_index: "@2".to_string(), token_id: H128::from_str("0xba3aaf468f793d9b42fd3328e24f1de9").unwrap() }),
+            ("MANLET_USDC".to_string(), MarketIndexData { market_index: "@3".to_string(), token_id: H128::from_str("0xe9ced9225d2a69ccc8d6a5b224524b99").unwrap() }),
+        ]);
+
+        assert_eq!(expected_hashmap, test_data_mapping);
     }
 }
