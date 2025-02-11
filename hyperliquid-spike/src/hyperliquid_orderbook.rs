@@ -2,10 +2,12 @@ use std::str::FromStr;
 
 use bigdecimal::BigDecimal;
 use connector_model::{orderbook::{OrderBook, PriceLevel}, pricing::{Quantity, Rate}};
-use hyperliquid_rust_sdk::{BookLevel, L2Book, L2BookData};
+use hyperliquid_rust_sdk::{BookLevel, L2Book, L2BookData, Order};
 
 use crate::errors::HyperLiquidOrderBookErrors;
 
+/// This is very similar to SUI price levels can we turn this into traits? and then get an incoming OrderBook to use it?
+/// But we are using traits here? Can we make a struct and get it to imply these traits? Or generic traits?
 pub(super) struct HyperLiquidOrderBookData {
     timestamp: String,
     bids: Vec<HyperLiquidPriceLevel>,
@@ -17,6 +19,31 @@ struct HyperLiquidPriceLevel {
     quantity: BigDecimal
 }
 
+impl From<HyperLiquidPriceLevel> for PriceLevel {
+    fn from(value: HyperLiquidPriceLevel) -> Self {
+        PriceLevel {
+            price: Rate::new(value.price),
+            quantity: Quantity::new(value.quantity)
+        }
+    }
+}
+
+impl From<HyperLiquidOrderBookData> for OrderBook {
+    fn from(value: HyperLiquidOrderBookData) -> Self {
+
+        let ask_price_levels = value.asks
+        .into_iter()
+        .map(| data | PriceLevel::from(data))
+        .collect();
+
+        let bid_price_levels= value.bids.into_iter().
+        map(|data| PriceLevel::from(data))
+        .collect();
+
+        OrderBook::new(bid_price_levels, ask_price_levels)
+    }
+}
+
 /// L2 Order Book gives a reference to book level, therefore for Speed of Dev we can do this, is there better way
 /// 
 impl TryFrom<&BookLevel> for HyperLiquidPriceLevel {
@@ -24,7 +51,7 @@ impl TryFrom<&BookLevel> for HyperLiquidPriceLevel {
     fn try_from(input_book_level: &BookLevel) -> Result<Self, Self::Error> {
         Ok( HyperLiquidPriceLevel {
             price: BigDecimal::from_str(&input_book_level.px)?,
-            quantity: BigDecimal::from_str(&input_book_level.px)?
+            quantity: BigDecimal::from_str(&input_book_level.sz)?
             })
     }
 }
@@ -38,13 +65,13 @@ impl TryFrom<L2BookData> for HyperLiquidOrderBookData {
 
     fn try_from(l2_order_book_data: L2BookData) -> Result<Self, Self::Error> {
         if l2_order_book_data.levels.len() != 2 { return Err(HyperLiquidOrderBookErrors::InvalidL2OrderBook)}
-        // Bids
+        // Bids - located at index 0 i.e. the second vector
         let bids: Vec<HyperLiquidPriceLevel> = l2_order_book_data.levels[0].iter().map(|l2_level| {
             HyperLiquidPriceLevel::try_from(l2_level)
         }).collect::<Result<Vec<HyperLiquidPriceLevel>, HyperLiquidOrderBookErrors>>()?;
 
-        // Asks
-        let asks: Vec<HyperLiquidPriceLevel> = l2_order_book_data.levels[0].iter().map(|l2_level| {
+        // Asks - located at index 1 i.e. the second vector
+        let asks: Vec<HyperLiquidPriceLevel> = l2_order_book_data.levels[1].iter().map(|l2_level| {
             HyperLiquidPriceLevel::try_from(l2_level)
         }).collect::<Result<Vec<HyperLiquidPriceLevel>, HyperLiquidOrderBookErrors>>()?;
 
@@ -54,16 +81,6 @@ impl TryFrom<L2BookData> for HyperLiquidOrderBookData {
             asks
         })
     }
-}
-
-// impl From<HyperLiquidOrderBookData> for OrderBook {
-//     fn from(value: HyperLiquidOrderBookData) -> Self {
-        
-//     }
-// }
-/// This function converts the orderbook data from the hyperliquid format to the required orderbook provided by connector-commons
-fn convert_to_orderbook(){
-
 }
 
 #[cfg(test)]
@@ -122,12 +139,17 @@ mod tests {
     #[test]
     fn test_order_book_conversion(){
         let test_fixture = create_test_fixture();
+        let test_fixture_timestamp = test_fixture.data.time.to_string();
         let test_fixture_bid_len = test_fixture.data.levels[0].len();
         let test_fixture_ask_len = test_fixture.data.levels[1].len();
 
         let test_hyper_liquid_order_book = HyperLiquidOrderBookData::try_from(test_fixture.data).unwrap();
         assert_eq!(test_hyper_liquid_order_book.asks.len(), test_fixture_ask_len);
         assert_eq!(test_hyper_liquid_order_book.bids.len(), test_fixture_bid_len);
+        assert_eq!(test_hyper_liquid_order_book.timestamp, test_fixture_timestamp);
 
+        let order_book_under_test = OrderBook::from(test_hyper_liquid_order_book);
+        assert_eq!(order_book_under_test.bids.get_best_price_level(), Some(&PriceLevel{ price: Rate(BigDecimal::from_str("51.05").unwrap()), quantity: Quantity(BigDecimal::from_str("677.32").unwrap())} ));
+        assert_eq!(order_book_under_test.asks.get_best_price_level(), Some(&PriceLevel{ price: Rate(BigDecimal::from_str("88.99").unwrap()), quantity: Quantity(BigDecimal::from_str("0.43").unwrap())} ));
     }
 }

@@ -15,6 +15,7 @@ use index_extractor::extract_market_index;
 
 mod hyperliquid_info_client;
 mod hyperliquid_orderbook;
+mod errors;
 
 #[tokio::main]
 async fn main() {
