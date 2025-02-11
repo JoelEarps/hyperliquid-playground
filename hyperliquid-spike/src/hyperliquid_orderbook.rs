@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use bigdecimal::BigDecimal;
-use connector_model::{orderbook::{OrderBook, PriceLevel}, pricing::{Quantity, Rate}};
+use connector_model::{orderbook::{OrderBook, OrderBookAsk, OrderBookBid, OrderBookSide, PriceLevel}, pricing::{Quantity, Rate}};
 use hyperliquid_rust_sdk::{BookLevel, L2Book, L2BookData, Order};
 
 use crate::errors::HyperLiquidOrderBookErrors;
@@ -53,6 +53,33 @@ impl TryFrom<&BookLevel> for HyperLiquidPriceLevel {
             price: BigDecimal::from_str(&input_book_level.px)?,
             quantity: BigDecimal::from_str(&input_book_level.sz)?
             })
+    }
+}
+
+#[derive(Debug)]
+pub struct TestOrderBook {
+    pub bids: OrderBookSide<OrderBookBid>,
+    pub asks: OrderBookSide<OrderBookAsk>,
+}
+
+impl TestOrderBook {
+    pub fn new_from_iter<T: Into<PriceLevel>>(
+        bids: impl IntoIterator<Item = T>,
+        asks: impl IntoIterator<Item = T>,
+    ) -> Self {
+        Self {
+            bids: OrderBookSide::new(bids.into_iter().map(Into::into).collect()),
+            asks: OrderBookSide::new(asks.into_iter().map(Into::into).collect()),
+        }
+    }
+    pub fn new_from_iter_ref<'generic_orderbook_lifetime, T: 'generic_orderbook_lifetime + Into<PriceLevel> + Copy>(
+        bids: impl IntoIterator<Item = &'generic_orderbook_lifetime T>,
+        asks: impl IntoIterator<Item = &'generic_orderbook_lifetime T>,
+    ) -> Self {
+        Self {
+            bids: OrderBookSide::new(bids.into_iter().copied().map(Into::into).collect()),
+            asks: OrderBookSide::new(asks.into_iter().copied().map(Into::into).collect()),
+        }
     }
 }
 
@@ -151,5 +178,14 @@ mod tests {
         let order_book_under_test = OrderBook::from(test_hyper_liquid_order_book);
         assert_eq!(order_book_under_test.bids.get_best_price_level(), Some(&PriceLevel{ price: Rate(BigDecimal::from_str("51.05").unwrap()), quantity: Quantity(BigDecimal::from_str("677.32").unwrap())} ));
         assert_eq!(order_book_under_test.asks.get_best_price_level(), Some(&PriceLevel{ price: Rate(BigDecimal::from_str("88.99").unwrap()), quantity: Quantity(BigDecimal::from_str("0.43").unwrap())} ));
+    }
+
+    #[test]
+    fn generic_order_book_conversion(){
+        let test_fixture = create_test_fixture();
+        let test_hyper_liquid_order_book = HyperLiquidOrderBookData::try_from(test_fixture.data).unwrap();
+        let test_order_book = TestOrderBook::new_from_iter(test_hyper_liquid_order_book.bids, test_hyper_liquid_order_book.asks);
+
+        println!("{:?}", test_order_book);
     }
 }

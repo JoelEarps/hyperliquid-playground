@@ -159,8 +159,6 @@ mod tests {
     }
     "#;
     
-
-
     #[test]
     fn check_for_base_quote_match() {
         let valid_test_data: SpotMeta = serde_json::from_str(TEST_FIXTURE).unwrap();

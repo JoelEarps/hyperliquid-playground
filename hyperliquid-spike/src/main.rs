@@ -68,25 +68,6 @@ async fn main() {
 
     
 
-    // println!("Bye Joel");
+    println!("Bye Joel");
 
-    // OrderBook:
 }
-
-// struct  NativeBookLevel {
-//     pub px: String,
-//     pub sz: String,
-//     pub n: u64,
-// }
-
-// impl TryFrom<Vec<Vec<NativeBookLevel>>> for PriceLevel {
-
-// }
-
-// // impl TryFrom<BookLevel> for PriceLevel {
-// //     type Error = dyn std::error::Error;
-
-// //     fn try_from(value: BookLevel) -> Result<Self, Self::Error> {
-        
-// //     }
-// // }
