@@ -2,19 +2,19 @@ use std::str::FromStr;
 
 use bigdecimal::BigDecimal;
 use connector_model::{orderbook::{OrderBook, OrderBookAsk, OrderBookBid, OrderBookSide, PriceLevel}, pricing::{Quantity, Rate}};
-use hyperliquid_rust_sdk::{BookLevel, L2Book, L2BookData, Order};
+use hyperliquid_rust_sdk::{BookLevel, L2BookData};
 
 use crate::errors::HyperLiquidOrderBookErrors;
 
 /// This is very similar to SUI price levels can we turn this into traits? and then get an incoming OrderBook to use it?
 /// But we are using traits here? Can we make a struct and get it to imply these traits? Or generic traits?
-pub(super) struct HyperLiquidOrderBookData {
+pub(crate) struct HyperLiquidOrderBookData {
     timestamp: String,
-    bids: Vec<HyperLiquidPriceLevel>,
-    asks: Vec<HyperLiquidPriceLevel>
+    pub(crate) bids: Vec<HyperLiquidPriceLevel>,
+    pub(crate) asks: Vec<HyperLiquidPriceLevel>
 }
 
-struct HyperLiquidPriceLevel {
+pub(crate) struct HyperLiquidPriceLevel {
     price: BigDecimal,
     quantity: BigDecimal
 }
@@ -57,7 +57,7 @@ impl TryFrom<&BookLevel> for HyperLiquidPriceLevel {
 }
 
 #[derive(Debug)]
-pub struct TestOrderBook {
+pub(crate) struct TestOrderBook {
     pub bids: OrderBookSide<OrderBookBid>,
     pub asks: OrderBookSide<OrderBookAsk>,
 }
