@@ -8,7 +8,7 @@ use hyperliquid_rust_sdk::{BaseUrl, InfoClient, Message, Subscription};
 use tokio::{
     spawn,
     sync::mpsc::unbounded_channel,
-    time::{sleep, Duration},
+    time::{sleep, self, Duration},
 };
 
 mod index_extractor;
@@ -16,7 +16,6 @@ use index_extractor::extract_market_index;
 
 mod hyperliquid_info_client;
 mod errors;
-// use hyperliquid_info_client::{hyperliquid_api_client::HyperLiquidApiClient, hyperliquid_orderbook::{HyperLiquidOrderBookData, TestOrderBook}};
 
 /// Very Rough POC - just proving the point until we implement an MVP and better practices
 #[tokio::main]
@@ -37,10 +36,22 @@ async fn main() {
     let spot_meta = websocket_handler_under_test.0.info_client.spot_meta().await.expect("Could not receive spot meta data");
 
     let extracted_market_indexes = extract_market_index(spot_meta);
-    let required_index
-    websocket_handler_under_test.0.subscribe_to_market_index(required_index).await.unwrap();
+    if let Some(required_index) = extracted_market_indexes.get(required_market_pair) {
+        let result = websocket_handler_under_test.0.subscribe_to_market_index(required_index).await.unwrap();
+        println!("Here 2: {}", result);
 
-    let global_handler_under_test = HyperLiquidGlobalMarketDataHandler::new(Arc::new(Mutex::new(websocket_handler_under_test.0)), websocket_handler_under_test.1).await;
+        let clone_tx = websocket_handler_under_test.0.market_sender.clone();
+
+        let global_handler_under_test = HyperLiquidGlobalMarketDataHandler::new(Arc::new(Mutex::new(websocket_handler_under_test.0)), websocket_handler_under_test.1).await;
+
+        let mut interval = time::interval(Duration::from_secs(1));
+
+        // Have this in order to keep the thread alive - will figure out the run time issues
+        loop {
+            interval.tick().await; // Waits for the interval to complete
+            println!("Tick: {:?}", tokio::time::Instant::now());
+        }
+    }
 
     // Use Market Index to gather information
 
@@ -72,10 +83,5 @@ async fn main() {
     // Place the Order 
     // Handle Response
 
-    // What is the difference between a spot order and a spot transfer, there are also other examples
-    // Open Question - does the exchange client handle signature generation, if so how?
-    
-
     println!("Bye Joel");
-
 }

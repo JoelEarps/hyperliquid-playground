@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use connector_utils::sync::{job_handler::JobHandler, notifier::Notifier};
 use dashmap::DashMap;
@@ -12,7 +13,7 @@ use hyperliquid_rust_sdk::{L2BookData, BaseUrl, ClientLimit, ClientOrder, Client
 // The use of JobHandler is to make sure that only one instance of the WebSocket connection exists and that we can handle multiple subscriptions to it.
 pub(crate) struct HyperLiquidWebSocketHandler {
     pub info_client: InfoClient,
-    market_sender: UnboundedSender<Message>,
+    pub market_sender: UnboundedSender<Message>,
 }
 
 type Test = (HyperLiquidWebSocketHandler, UnboundedReceiver<Message>);
@@ -26,12 +27,13 @@ impl HyperLiquidWebSocketHandler {
 
        Ok((Self{
         info_client, 
-        market_sender:snd}, 
+        market_sender: snd}, 
         rcv))
     }
 
-    pub async fn subscribe_to_market_index(&mut self, required_index: &MarketIndexData) -> Result<(), HyperLiquidNetworkErrors>{
-        let _ = self.info_client
+    pub async fn subscribe_to_market_index(&mut self, required_index: &MarketIndexData) -> Result<u32, HyperLiquidNetworkErrors>{
+        println!("Testing {}", required_index.market_index);
+        let sub_id = self.info_client
         .subscribe(
             Subscription::L2Book {
                 coin: required_index.market_index.clone()
@@ -40,7 +42,9 @@ impl HyperLiquidWebSocketHandler {
         )
         .await
         ?;
-    Ok(())
+
+    println!("Testing {}", sub_id);
+    Ok(sub_id)
     }
 }
 
@@ -71,21 +75,18 @@ impl HyperLiquidGlobalMarketDataHandler{
 
         
         async fn spawn_market_data_consumer(self: &Arc<Self>, mut market_data_receiver: UnboundedReceiver<Message>) {
-            println!("Here");
             let global_handler_clone  = self.clone();
             let websocket_job = tokio::spawn(async move {
-                while let Some(Message::L2Book(l2_book)) = market_data_receiver.recv().await {
+                    while let Some(Message::L2Book(l2_book)) = market_data_receiver.recv().await {
                     // Change to orderbook in connector commons when PR is resolved
                     // https://gitlab.com/swissborg/defi/connector-commons/-/merge_requests/7
                     let hyperliquid_order_book = HyperLiquidOrderBookData::try_from(l2_book.data).expect("Add custom error here for failing");
                     let swissborg_order_book = TestOrderBook::new_from_iter(hyperliquid_order_book.bids, hyperliquid_order_book.asks);
                     println!("Swissborg model for orderbook: {:?}", swissborg_order_book);
-                    
                     // Push this data to a DashMap and check output
-                }
+                    }
                 Ok(())
             });
-
         self.job_handler.replace(websocket_job);
         }
 }
@@ -115,6 +116,7 @@ mod tests
         websocket_handler_under_test.0.subscribe_to_market_index(required_index).await.unwrap();
 
         let global_handler_under_test = HyperLiquidGlobalMarketDataHandler::new(Arc::new(Mutex::new(websocket_handler_under_test.0)), websocket_handler_under_test.1).await;
+
 
     }
 }
