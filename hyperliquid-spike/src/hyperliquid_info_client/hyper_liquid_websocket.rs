@@ -103,20 +103,100 @@ mod tests
 {
     use std::str::FromStr;
     use ethers::types::H128;
+    use hyperliquid_rust_sdk::{BookLevel, L2Book};
     use super::*;
+
+    use tokio::{
+        spawn,
+        sync::mpsc::unbounded_channel,
+        time::{sleep, self, Duration},
+    };
+
+    // This is reused in hyperliquid-spike/src/hyperliquid_info_client/hyperliquid_orderbook.rs, please make a test fixture
+    fn create_test_fixture() -> L2Book{
+        L2Book { data: L2BookData { 
+            coin: "@1035".to_string(), 
+            time: 1739197119187, 
+            levels: vec![vec![BookLevel { px: "51.05".to_string(), sz: "677.32".to_string(), n: 2 }, 
+                        BookLevel { px: "51.0".to_string(), sz: "605.74".to_string(), n: 2 }, 
+                        BookLevel { px: "50.0".to_string(), sz: "14057.16".to_string(), n: 3 }, 
+                        BookLevel { px: "46.5".to_string(), sz: "6.96".to_string(), n: 1 }, 
+                        BookLevel { px: "46.0".to_string(), sz: "8.24".to_string(), n: 1 }, 
+                        BookLevel { px: "41.683".to_string(), sz: "797.44".to_string(), n: 1 }, 
+                        BookLevel { px: "40.0".to_string(), sz: "81577.39".to_string(), n: 4 }, 
+                        BookLevel { px: "32.477".to_string(), sz: "1017.86".to_string(), n: 1 }, 
+                        BookLevel { px: "32.0".to_string(), sz: "935.78".to_string(), n: 1 }, 
+                        BookLevel { px: "30.0".to_string(), sz: "133333.32".to_string(), n: 2 }, 
+                        BookLevel { px: "26.0".to_string(), sz: "5009.69".to_string(), n: 2 }, 
+                        BookLevel { px: "25.0".to_string(), sz: "616.0".to_string(), n: 6 }, 
+                        BookLevel { px: "23.2".to_string(), sz: "1.0".to_string(), n: 1 }, 
+                        BookLevel { px: "22.0".to_string(), sz: "1307.53".to_string(), n: 1 }, 
+                        BookLevel { px: "20.0".to_string(), sz: "200000.0".to_string(), n: 2 }, 
+                        BookLevel { px: "11.92".to_string(), sz: "200.0".to_string(), n: 1 }, 
+                        BookLevel { px: "11.885".to_string(), sz: "200.0".to_string(), n: 1 }, 
+                        BookLevel { px: "11.85".to_string(), sz: "200.0".to_string(), n: 1 }, 
+                        BookLevel { px: "11.815".to_string(), sz: "200.0".to_string(), n: 1 }, 
+                        BookLevel { px: "11.78".to_string(), sz: "200.0".to_string(), n: 1 }], 
+                        vec![BookLevel { px: "88.99".to_string(), sz: "0.43".to_string(), n: 1 }, 
+                        BookLevel { px: "89.0".to_string(), sz: "16.38".to_string(), n: 1 }, 
+                        BookLevel { px: "90.0".to_string(), sz: "0.51".to_string(), n: 1 }, 
+                        BookLevel { px: "93.513".to_string(), sz: "9.98".to_string(), n: 1 }, 
+                        BookLevel { px: "94.0".to_string(), sz: "84.82".to_string(), n: 1 }, 
+                        BookLevel { px: "94.421".to_string(), sz: "0.27".to_string(), n: 1 }, 
+                        BookLevel { px: "96.322".to_string(), sz: "500.0".to_string(), n: 1 }, 
+                        BookLevel { px: "97.26".to_string(), sz: "514.74".to_string(), n: 2 }, 
+                        BookLevel { px: "98.826".to_string(), sz: "0.86".to_string(), n: 1 }, 
+                        BookLevel { px: "99.0".to_string(), sz: "1128.95".to_string(), n: 2 }, 
+                        BookLevel { px: "100.0".to_string(), sz: "689.91".to_string(), n: 1 }, 
+                        BookLevel { px: "101.01".to_string(), sz: "4602.53".to_string(), n: 1 }, 
+                        BookLevel { px: "102.02".to_string(), sz: "10000.0".to_string(), n: 1 }, 
+                        BookLevel { px: "103.03".to_string(), sz: "10000.0".to_string(), n: 1 }, 
+                        BookLevel { px: "104.04".to_string(), sz: "10000.0".to_string(), n: 1 }, 
+                        BookLevel { px: "105.05".to_string(), sz: "10000.0".to_string(), n: 1 }, 
+                        BookLevel { px: "106.06".to_string(), sz: "10000.0".to_string(), n: 1 }, 
+                        BookLevel { px: "107.05".to_string(), sz: "1297.88".to_string(), n: 1 }, 
+                        BookLevel { px: "107.07".to_string(), sz: "10000.0".to_string(), n: 1 }, 
+                        BookLevel { px: "108.08".to_string(), sz: "10000.0".to_string(), n: 1 }]]}}
+    }
 
     // Provide test url for websocket? 
     #[tokio::test]
     async fn test_websocket_handler(){
         let required_index = &MarketIndexData {
-            market_index: "HYPE_USDC".to_string(),
+            market_index: "@1035".to_string(),
             token_id: H128::from_str("0xbaf265ef389da684513d98d68edf4eae").unwrap()
         };
+
+        // Test this builds and connects successfuly
         let mut websocket_handler_under_test = HyperLiquidWebSocketHandler::new().await.unwrap();
         websocket_handler_under_test.0.subscribe_to_market_index(required_index).await.unwrap();
 
-        let global_handler_under_test = HyperLiquidGlobalMarketDataHandler::new(Arc::new(Mutex::new(websocket_handler_under_test.0)), websocket_handler_under_test.1).await;
+        // create mocked channel for sender?
 
+        // Create a channel with a buffer size of 10
+        let (mocked_sender, mocked_receiver) = unbounded_channel::<Message>();
 
+        // Spawn a sender task
+        // Can handle no data sent here too, helpful for BDD scenario
+        // Send the same data and always expect same length of data and same data to be present in hash map
+
+        let mocked_book_data = create_test_fixture();
+
+        tokio::spawn(async move {
+            for i in 1..=10 {
+                mocked_sender.send(Message::L2Book(mocked_book_data.clone()));
+                println!("Sent: Message {}", i);
+                sleep(Duration::from_millis(1000)).await; 
+            }
+        });
+
+        let global_handler_under_test = HyperLiquidGlobalMarketDataHandler::new(Arc::new(Mutex::new(websocket_handler_under_test.0)), mocked_receiver).await;
+
+        let mut interval = time::interval(Duration::from_secs(1));
+
+        loop {
+            interval.tick().await; // Waits for the interval to complete
+            
+        }
     }
 }

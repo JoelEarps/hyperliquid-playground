@@ -40,8 +40,6 @@ async fn main() {
         let result = websocket_handler_under_test.0.subscribe_to_market_index(required_index).await.unwrap();
         println!("Here 2: {}", result);
 
-        let clone_tx = websocket_handler_under_test.0.market_sender.clone();
-
         let global_handler_under_test = HyperLiquidGlobalMarketDataHandler::new(Arc::new(Mutex::new(websocket_handler_under_test.0)), websocket_handler_under_test.1).await;
 
         let mut interval = time::interval(Duration::from_secs(1));

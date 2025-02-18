@@ -117,6 +117,7 @@ mod tests {
 
     use super::*;
 
+    // Make reusable fixture for other tests
     fn create_test_fixture() -> L2Book{
         L2Book { data: L2BookData { 
             coin: "@1035".to_string(), 
