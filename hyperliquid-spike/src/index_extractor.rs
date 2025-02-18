@@ -56,7 +56,7 @@ pub type MarketIndexMap = HashMap<String, MarketIndexData>;
 #[derive(PartialEq, Eq, Debug)]
 pub struct MarketIndexData {
     pub market_index: String,
-    token_id: H128,
+    pub token_id: H128,
 }
 
 #[cfg(test)]
