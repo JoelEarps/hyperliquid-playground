@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -16,11 +17,11 @@ pub(crate) struct HyperLiquidWebSocketHandler {
     pub market_sender: UnboundedSender<Message>,
 }
 
-type Test = (HyperLiquidWebSocketHandler, UnboundedReceiver<Message>);
+type HandlerResult = (HyperLiquidWebSocketHandler, UnboundedReceiver<Message>);
 
 impl HyperLiquidWebSocketHandler {
 
-    pub(crate) async fn new() -> Result<Test, ()>{
+    pub(crate) async fn new() -> Result<HandlerResult, ()>{
         let client = Client::default();
         let info_client = InfoClient::new(Some(client), Some(BaseUrl::Testnet)).await.unwrap();
         let (snd,rcv) = unbounded_channel::<Message>();
@@ -32,7 +33,6 @@ impl HyperLiquidWebSocketHandler {
     }
 
     pub async fn subscribe_to_market_index(&mut self, required_index: &MarketIndexData) -> Result<u32, HyperLiquidNetworkErrors>{
-        println!("Testing {}", required_index.market_index);
         let sub_id = self.info_client
         .subscribe(
             Subscription::L2Book {
@@ -43,8 +43,7 @@ impl HyperLiquidWebSocketHandler {
         .await
         ?;
 
-    println!("Testing {}", sub_id);
-    Ok(sub_id)
+        Ok(sub_id)
     }
 }
 
@@ -58,7 +57,7 @@ pub struct HyperLiquidGlobalMarketDataHandler {
 }
 
 /// Responsible for pushing Data from the WebSocket to the global cache
-impl HyperLiquidGlobalMarketDataHandler{
+impl HyperLiquidGlobalMarketDataHandler {
 
         pub async fn new(ws_handler: Arc<Mutex<HyperLiquidWebSocketHandler>>, market_data_receiver:UnboundedReceiver<Message>)-> Arc<Self> {
 
@@ -78,12 +77,26 @@ impl HyperLiquidGlobalMarketDataHandler{
             let global_handler_clone  = self.clone();
             let websocket_job = tokio::spawn(async move {
                     while let Some(Message::L2Book(l2_book)) = market_data_receiver.recv().await {
+                    let map_key = l2_book.data.coin.clone();
+                    let hyperliquid_order_book = HyperLiquidOrderBookData::try_from(l2_book.data).expect("Add custom error here for failing");
                     // Change to orderbook in connector commons when PR is resolved
                     // https://gitlab.com/swissborg/defi/connector-commons/-/merge_requests/7
-                    let hyperliquid_order_book = HyperLiquidOrderBookData::try_from(l2_book.data).expect("Add custom error here for failing");
                     let swissborg_order_book = TestOrderBook::new_from_iter(hyperliquid_order_book.bids, hyperliquid_order_book.asks);
-                    println!("Swissborg model for orderbook: {:?}", swissborg_order_book);
-                    // Push this data to a DashMap and check output
+                    // If key already exists, then perform an insert of new notifier, otherwise use reference to existing to notifier
+                    // This will not update the latest data, only if a new reference exists, think the only option is a match statement?
+                    // let result = global_handler_clone.market_data_cache.entry(map_key).or_insert(BookNotifier {latest_book: swissborg_order_book, notifier: Notifier::new()} );
+                    match global_handler_clone.market_data_cache.entry(map_key) {
+                        dashmap::Entry::Occupied(mut current_entry) => {
+                            let values = current_entry.get_mut();
+                            values.latest_book = swissborg_order_book;
+                            values.notifier.notify();
+
+                        },
+                        dashmap::Entry::Vacant(vacant_entry) => {
+                            let new_entry = vacant_entry.insert(BookNotifier {latest_book: swissborg_order_book, notifier: Notifier::new()});
+                            new_entry.notifier.notify();
+                        }
+                    }
                     }
                 Ok(())
             });
@@ -91,17 +104,23 @@ impl HyperLiquidGlobalMarketDataHandler{
         }
 }
 
-
-
-pub struct BookNotifier{
+pub struct BookNotifier {
     latest_book : TestOrderBook,
-    notifier:  Notifier, // from connector commons
+    notifier:  Notifier,
 }
+
+// impl Debug for BookNotifier {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         format!("Latest Book asks: {}, latest book bids: {}", self.latest_book.asks)
+//     }
+// }
 
 #[cfg(test)]
 mod tests
 {
     use std::str::FromStr;
+    use bigdecimal::BigDecimal;
+    use connector_model::{orderbook::PriceLevel, pricing::{Quantity, Rate}};
     use ethers::types::H128;
     use hyperliquid_rust_sdk::{BookLevel, L2Book};
     use super::*;
@@ -185,7 +204,6 @@ mod tests
         tokio::spawn(async move {
             for i in 1..=10 {
                 mocked_sender.send(Message::L2Book(mocked_book_data.clone()));
-                println!("Sent: Message {}", i);
                 sleep(Duration::from_millis(1000)).await; 
             }
         });
@@ -193,10 +211,24 @@ mod tests
         let global_handler_under_test = HyperLiquidGlobalMarketDataHandler::new(Arc::new(Mutex::new(websocket_handler_under_test.0)), mocked_receiver).await;
 
         let mut interval = time::interval(Duration::from_secs(1));
+        let mut target = 0;
 
         loop {
+
             interval.tick().await; // Waits for the interval to complete
-            
+            assert_eq!(1, global_handler_under_test.market_data_cache.len());
+            if target > 10 {
+                break;
+            }
+            target+=1;
         }
+
+        if let Some(test_result) = global_handler_under_test.market_data_cache.get("@1035")  {
+            assert_eq!(test_result.value().latest_book.bids.get_best_price_level(), Some(&PriceLevel{ price: Rate(BigDecimal::from_str("51.05").unwrap()), quantity: Quantity(BigDecimal::from_str("677.32").unwrap())} ));
+            assert_eq!(test_result.value().latest_book.asks.get_best_price_level(), Some(&PriceLevel{ price: Rate(BigDecimal::from_str("88.99").unwrap()), quantity: Quantity(BigDecimal::from_str("0.43").unwrap())} ));
+        }
+
+        assert!(global_handler_under_test.market_data_cache.contains_key("@1035"));
+
     }
 }

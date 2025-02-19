@@ -20,7 +20,6 @@ mod errors;
 /// Very Rough POC - just proving the point until we implement an MVP and better practices
 #[tokio::main]
 async fn main() {
-    println!("Hello Joel");
 
     // Key was randomly generated for testing and shouldn't be used with any real funds
     // TODO: Use and integrate a real wallet
@@ -38,7 +37,6 @@ async fn main() {
     let extracted_market_indexes = extract_market_index(spot_meta);
     if let Some(required_index) = extracted_market_indexes.get(required_market_pair) {
         let result = websocket_handler_under_test.0.subscribe_to_market_index(required_index).await.unwrap();
-        println!("Here 2: {}", result);
 
         let global_handler_under_test = HyperLiquidGlobalMarketDataHandler::new(Arc::new(Mutex::new(websocket_handler_under_test.0)), websocket_handler_under_test.1).await;
 
