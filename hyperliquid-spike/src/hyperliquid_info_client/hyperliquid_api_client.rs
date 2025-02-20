@@ -14,6 +14,10 @@ use crate::index_extractor::MarketIndexData;
 
 use super::{hyper_liquid_websocket::{HyperLiquidGlobalMarketDataHandler, HyperLiquidWebSocketHandler}, hyperliquid_orderbook::TestOrderBook};
 
+/// A custom struct used to handle sending live data to OMS and also manage creating and sending spot orders
+/// The plan is to have one API client per Market Orderbook
+/// # Errors
+/// TODO: Implement custom error handling for this struct
 // TODO: Imply Metrics and GRPC Connector
 pub(crate) struct HyperLiquidApiClient {
     pub(crate) exchange_client: ExchangeClient,
@@ -22,10 +26,11 @@ pub(crate) struct HyperLiquidApiClient {
 }
 
 impl HyperLiquidApiClient {
-    // Rather than creating a seperate HTTP client we can use the same one created for the InfoClient, how will this work with concurrency?
+    /// Create a new API client
+    // TODO: Rather than creating a seperate HTTP client we can use the same one created for the InfoClient, how will this work with concurrency?
     pub(crate) async fn new(user_wallet: LocalWallet, global_market_handler: &Arc<HyperLiquidGlobalMarketDataHandler>, market_id: &MarketIndexData) -> Self {
         Self {
-            // TODO: Configurable Address for 
+            // TODO: Configurable Address for exchange client to enable mocked unit/ integration tests
             exchange_client: ExchangeClient::new(None, user_wallet, Some(BaseUrl::Testnet), None, None).await.expect("Cannot make exchange client, fail for now, handle errors later"),
             market_id: market_id.clone(),
             global_market_handler: global_market_handler.clone()
@@ -191,7 +196,7 @@ mod tests {
 
     
 #[tokio::test(flavor = "multi_thread")]
-// What are the key characteristics do we care abotu testing here?
+// What are the key characteristics do we care about testing here?
 async fn fetch_orderbook_hyperliquid_client(){
     let wallet: LocalWallet = "e908f86dbb4d55ac876378565aafeabc187f6690f046459397b17d9b9a19688e"
         .parse()
@@ -202,7 +207,6 @@ async fn fetch_orderbook_hyperliquid_client(){
             token_id: H128::from_str("0xbaf265ef389da684513d98d68edf4eae").unwrap()
     };
 
-    // Reused Logic, can this be made into a test fixture
     // TODO: Looking into providing variable mocked data, or providing a mocked API server so we can pass mocked data through and create deterministic tests
     let (websocket_handler_under_test, _) = HyperLiquidWebSocketHandler::new().await.unwrap();
     let (mocked_sender, mocked_receiver) = unbounded_channel();

@@ -11,6 +11,8 @@ use crate::hyperliquid_info_client::hyperliquid_orderbook::{HyperLiquidOrderBook
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use hyperliquid_rust_sdk::{BaseUrl, InfoClient, Message, Subscription};
 
+use super::hyperliquid_types::{BookId, HandlerConstructorResult};
+
 
 /// A handling struct that is a wrapper around the Rust SDK InfoClient, it is responsible for managing the websocket connection and pushing messages to a channel
 /// This send aspect of the channel is bound to a websocket subscription, the receive is then passed to the global cache to be used to read and handle websocket messages.
@@ -20,9 +22,6 @@ pub(crate) struct HyperLiquidWebSocketHandler {
     pub info_client: InfoClient,
     pub market_sender: UnboundedSender<Message>,
 }
-
-/// A type alias for the tuple returned for creating a new HyperLiquidWebSocketHandler
-type HandlerConstructorResult = (HyperLiquidWebSocketHandler, UnboundedReceiver<Message>);
 
 impl HyperLiquidWebSocketHandler {
     /// Constructor for a new handler
@@ -57,9 +56,6 @@ impl HyperLiquidWebSocketHandler {
         Ok(sub_id)
     }
 }
-
-/// A type alias used for referencing the market pair data being gathered, often used for subscribing
-pub type BookId =  String;
 
 /// Global Handler 
 pub struct HyperLiquidGlobalMarketDataHandler {

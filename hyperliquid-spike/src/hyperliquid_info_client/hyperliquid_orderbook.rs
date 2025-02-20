@@ -6,8 +6,8 @@ use hyperliquid_rust_sdk::{BookLevel, L2BookData};
 
 use crate::errors::HyperLiquidOrderBookErrors;
 
-/// This is very similar to SUI price levels can we turn this into traits? and then get an incoming OrderBook to use it?
-/// But we are using traits here? Can we make a struct and get it to imply these traits? Or generic traits?
+/// Required due to Orphan rules of conversion between two types not in the same crate
+/// This is the base representation of Orderbook data from the HyperLiquid spot meta api endpoint
 pub(crate) struct HyperLiquidOrderBookData {
     timestamp: String,
     pub(crate) bids: Vec<HyperLiquidPriceLevel>,
@@ -19,6 +19,7 @@ pub(crate) struct HyperLiquidPriceLevel {
     quantity: BigDecimal
 }
 
+/// Convert between HyperLiquid format to Connector Commons Price Level
 impl From<HyperLiquidPriceLevel> for PriceLevel {
     fn from(value: HyperLiquidPriceLevel) -> Self {
         PriceLevel {
@@ -28,6 +29,7 @@ impl From<HyperLiquidPriceLevel> for PriceLevel {
     }
 }
 
+/// 
 impl From<HyperLiquidOrderBookData> for OrderBook {
     fn from(value: HyperLiquidOrderBookData) -> Self {
 
@@ -56,6 +58,7 @@ impl TryFrom<&BookLevel> for HyperLiquidPriceLevel {
     }
 }
 
+/// Temporary Implementation till https://gitlab.com/swissborg/defi/connector-commons/-/merge_requests/7 is resolved
 #[derive(Debug, Clone)]
 pub(crate) struct TestOrderBook {
     pub bids: OrderBookSide<OrderBookBid>,
@@ -83,8 +86,9 @@ impl TestOrderBook {
     }
 }
 
-/// L2BookData - are the vec of vec lengths always two? One to simulate bids and one asks?
-/// Is there any documentation that supports this?
+/// Convert between L2 Book Data and Orderbook, I believe this can be removed when https://gitlab.com/swissborg/defi/connector-commons/-/merge_requests/7 is merged.
+/// # Open Question
+/// L2BookData - are the vec of vec lengths always two? One to simulate bids and one asks? Is there any documentation that supports this?
 /// There always appears to be two vectors, one where the prices start at a level and decrease, one where the prices start at a level and then increase slowly
 /// This infers bids and asks and will be therefore treated as such
 impl TryFrom<L2BookData> for HyperLiquidOrderBookData {
