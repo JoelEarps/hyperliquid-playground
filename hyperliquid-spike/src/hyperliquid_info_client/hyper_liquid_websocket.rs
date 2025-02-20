@@ -12,15 +12,22 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use hyperliquid_rust_sdk::{BaseUrl, InfoClient, Message, Subscription};
 
 
+/// A handling struct that is a wrapper around the Rust SDK InfoClient, it is responsible for managing the websocket connection and pushing messages to a channel
+/// This send aspect of the channel is bound to a websocket subscription, the receive is then passed to the global cache to be used to read and handle websocket messages.
+/// # Errors
+/// TODO: Add Error handling scenarios for failure
 pub(crate) struct HyperLiquidWebSocketHandler {
     pub info_client: InfoClient,
     pub market_sender: UnboundedSender<Message>,
 }
 
-type HandlerResult = (HyperLiquidWebSocketHandler, UnboundedReceiver<Message>);
+/// A type alias for the tuple returned for creating a new HyperLiquidWebSocketHandler
+type HandlerConstructorResult = (HyperLiquidWebSocketHandler, UnboundedReceiver<Message>);
 
 impl HyperLiquidWebSocketHandler {
-    pub(crate) async fn new() -> Result<HandlerResult, ()> {
+    /// Constructor for a new handler
+    /// The reason for returning a receiver and sender means that we can pass mock receivers around in the future, please see the tests for how this happens
+    pub(crate) async fn new() -> Result<HandlerConstructorResult, ()> {
         // TODO: Can we pass in the same client to be used in the exchange and info client - any negatives to this?
         let client = Client::default();
         let info_client = InfoClient::new(Some(client), Some(BaseUrl::Testnet)).await.unwrap();
@@ -32,6 +39,10 @@ impl HyperLiquidWebSocketHandler {
         rcv))
     }
 
+    /// Subscribe to the L2Book topic for a particular market index over the websocket client
+    /// # Return value
+    /// A subscription ID that is used to monitor subscriptions
+    /// TODO: Review whether we can use the subscription manager in the SDK to manage readiness and health checks (this may require SDK changes)
     async fn subscribe_to_market_index(&mut self, market_index: &BookId) -> Result<u32, HyperLiquidNetworkErrors>{
         let sub_id = self.info_client
         .subscribe(
@@ -73,7 +84,7 @@ impl HyperLiquidGlobalMarketDataHandler {
         global_handler  
         }
 
-        /// Mimicking 
+        /// Mimicking a subscription to the geyser cache or service that serves live data
         pub async fn subscribe_to_market(&self, market_id: &BookId) -> Result<(), HyperLiquidNetworkErrors> {
             if self.market_data_cache.contains_key(market_id) { return Ok(()) }
             else {
@@ -88,6 +99,8 @@ impl HyperLiquidGlobalMarketDataHandler {
             self.market_data_cache.get(market_id).map(|item| item.value().notifier.new_notified())
         }
 
+        /// Use the websocket receiver to pass orderbook messages, preprocess into the connector-commons orderbook format and insert into the DashMap to enable the latest data to be stored
+        /// A notifier is used to ensure the latest data is pushed to the orderbook stream
         async fn spawn_market_data_consumer(self: &Arc<Self>, mut market_data_receiver: UnboundedReceiver<Message>) {
             let global_handler_clone  = self.clone();
             let websocket_job = tokio::spawn(async move {
@@ -103,7 +116,6 @@ impl HyperLiquidGlobalMarketDataHandler {
                             values.latest_book = swissborg_order_book;
                             values.notifier.notify();
                         },
-                        // Better to update through a Mutex or to grab all at once from DashMap? Performance wise I would assume here?
                         dashmap::Entry::Vacant(vacant_entry) => {
                             let new_entry = vacant_entry.insert(BookNotifier {latest_book: swissborg_order_book, notifier: Notifier::new()});
                             new_entry.notifier.notify();
@@ -115,7 +127,7 @@ impl HyperLiquidGlobalMarketDataHandler {
         self.job_handler.replace(websocket_job);
         }
 
-        // TODO: Change Market ID to just string 
+        /// Getting the orderbook data for a particular market, this is used by the fetch_orderbook function in the HyperLiquidApiClient
         pub fn get_orderbook_data_for_market(&self, market_index: &BookId) -> Option<TestOrderBook>
         {
             if let Some(data) = self.market_data_cache.get(market_index) {
@@ -126,6 +138,7 @@ impl HyperLiquidGlobalMarketDataHandler {
         }
 }
 
+/// Custom struct used in the Dashmap
 pub struct BookNotifier {
     latest_book : TestOrderBook,
     notifier:  Notifier,

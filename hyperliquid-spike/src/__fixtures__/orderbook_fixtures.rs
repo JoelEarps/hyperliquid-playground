@@ -1,5 +1,6 @@
 use hyperliquid_rust_sdk::{L2Book, L2BookData, BookLevel};
 
+/// Test Fixture used to make mock L2book data that is typically passed into mock sender channels to stop receiving real time data.
 // This is reused in hyperliquid-spike/src/hyperliquid_info_client/hyperliquid_orderbook.rs, please make a test fixture
 // TODO: Use rstest to paramterise tests
 pub fn create_test_fixture() -> L2Book{
