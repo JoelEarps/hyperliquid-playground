@@ -53,7 +53,7 @@ pub(crate) fn extract_market_index(spot_meta: SpotMeta) -> MarketIndexMap {
 
 pub type MarketIndexMap = HashMap<String, MarketIndexData>;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct MarketIndexData {
     pub market_index: String,
     pub token_id: H128,

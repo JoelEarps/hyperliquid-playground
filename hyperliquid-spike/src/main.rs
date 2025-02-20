@@ -15,7 +15,11 @@ mod index_extractor;
 use index_extractor::extract_market_index;
 
 mod hyperliquid_info_client;
+
 mod errors;
+
+#[cfg(test)]
+mod __fixtures__;
 
 /// Very Rough POC - just proving the point until we implement an MVP and better practices
 #[tokio::main]
@@ -36,48 +40,12 @@ async fn main() {
 
     let extracted_market_indexes = extract_market_index(spot_meta);
     if let Some(required_index) = extracted_market_indexes.get(required_market_pair) {
-        let result = websocket_handler_under_test.0.subscribe_to_market_index(required_index).await.unwrap();
-
-        let global_handler_under_test = HyperLiquidGlobalMarketDataHandler::new(Arc::new(Mutex::new(websocket_handler_under_test.0)), websocket_handler_under_test.1).await;
-
         let mut interval = time::interval(Duration::from_secs(1));
-
         // Have this in order to keep the thread alive - will figure out the run time issues
         loop {
             interval.tick().await; // Waits for the interval to complete
             println!("Tick: {:?}", tokio::time::Instant::now());
         }
     }
-
-    // Use Market Index to gather information
-
-    // Build Orderbook Stream to gather market book data
-    
-    // Use the gathered Market Index to request 
-    // Error if no value returned from HashMap
-    // Good practice to only operate on the positive
-    // Create Web Socket and stream required data
-    // 1-1 relationship for now, potentially move it to MarketBuilder and Another Trait maybe? Like websocket
-    // if let Some(required_index) = extracted_market_indexes.get(dyn_market_client.required_market_pair) {
-    //     // let info_receiver = dyn_market_client.initialise_websocket(required_index).await;
-    //     let order_book_stream = dyn_market_client.build_orderbook_stream(MarketBuilderParameters { orders_limit: 15, convertion_params: None}, 1000, true).await;
-    //     // Abstract while loop using futures if possible
-    //     // For each incoming data
-    //     // Open Questions:
-    //     // 1. What rate do we want to gather data at, is it a long standing connection, do we want to be able to start and stop connections?
-    //     // 2. How do we handle multiple market pairs
-    // } else {
-    //     panic!("Need to add this to the error dump, no market data");
-    // }
-
-    // implement Dex API trait
-
-    // Simple spot order example - https://github.com/hyperliquid-dex/hyperliquid-rust-sdk/blob/master/src/bin/spot_order.rs
-    // Create or grab a wallet ✅
-    // Create an exchange client ✅
-    // Create a client order request 
-    // Place the Order 
-    // Handle Response
-
     println!("Bye Joel");
 }
