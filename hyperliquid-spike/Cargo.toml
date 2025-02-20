@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-connector-model = { package = "connector-model", git = "ssh://git@github.com/defiborg/connector-commons.git" }
+connector-model = { package = "connector-model", git = "ssh://git@github.com/defiborg/connector-commons.git", branch="TDX-1052" }
+connector-sb-client = { package = "connector-sb-client", git = "ssh://git@github.com/defiborg/connector-commons.git", branch="TDX-1052"}
+connector-utils = { package = "connector-utils", git = "ssh://git@github.com/defiborg/connector-commons.git", branch="TDX-1052"}
 tokio = "1.43.0"
 reqwest = "0.11.18"
 ethers = "2.0.14"
@@ -12,4 +14,8 @@ hyperliquid_rust_sdk = {path = "../hyperliquid-rust-sdk-patch" }
 serde_json = "1.0.138"
 bigdecimal = "0.4.7"
 thiserror = "2.0.11"
-
+tonic = "0.12.3"
+async-trait = "0.1.86"
+futures = "0.3.31"
+anyhow = "1.0.95"
+dashmap = "*"
