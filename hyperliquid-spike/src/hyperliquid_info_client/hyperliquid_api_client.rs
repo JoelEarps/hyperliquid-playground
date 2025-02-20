@@ -1,111 +1,71 @@
-// use std::{collections::HashMap, fmt::Display, ops::Deref, thread::spawn};
+use std::{collections::HashMap, fmt::Display, ops::Deref, sync::Arc, thread::spawn};
 
-// use bigdecimal::BigDecimal;
-// use connector_model::{bundle::{executed_order::ExecutedOrder, limit_order_result::{BundledLimitOrdersTransactionResult, BundledLimitOrdersTransactionResultForNetwork, TransactionExecuted}}, connector::{dex_api::{BuildTransactionRequest, DexTradingApi, ExecuteTransactionRequest, GetFeeRateRequest, GetReferenceMarketDataRequest, GetTransactionResquest, GetWalletBalanceRequest, StreamOrderBookRequest}, market_builder::MarketBuilder, market_type::{MarketBuilderParameters, MarketType}, response::BuildTransactionResponse}, dex, network::types::NetworkTypes, orderbook::{OrderBook, OrderBookSide, ReferenceMarketDataForNetwork}, pricing::{FeeRate, Quantity}};
-// use hyperliquid_rust_sdk::{BaseUrl, ClientLimit, ClientOrder, ClientOrderRequest, ExchangeClient, InfoClient, Message, Subscription};
-// use reqwest::Client;
-// use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
-// use tonic::Status;
-// use futures::{stream::BoxStream};
-// // Deprecated Library
-// use ethers::{signers::LocalWallet, types::{Transaction, H256}};
-// use std::str::FromStr;
+use bigdecimal::BigDecimal;
+use connector_model::{bundle::{executed_order::ExecutedOrder, limit_order_result::{BundledLimitOrdersTransactionResult, BundledLimitOrdersTransactionResultForNetwork, TransactionExecuted}}, connector::{dex_api::{BuildTransactionRequest, DexTradingApi, ExecuteTransactionRequest, GetFeeRateRequest, GetReferenceMarketDataRequest, GetTransactionResquest, GetWalletBalanceRequest, StreamOrderBookRequest}, market_builder::MarketBuilder, market_type::{MarketBuilderParameters, MarketType}, response::BuildTransactionResponse}, dex, network::types::NetworkTypes, orderbook::{OrderBook, OrderBookSide, ReferenceMarketDataForNetwork}, pricing::{FeeRate, Quantity}};
+use connector_utils::sync::notifier::{MergedNotifier, Notified};
+use hyperliquid_rust_sdk::{BaseUrl, ClientLimit, ClientOrder, ClientOrderRequest, ExchangeClient, InfoClient, Message, Subscription};
+use tonic::Status;
+use futures::{stream::BoxStream};
+// Deprecated Library
+use ethers::{signers::LocalWallet, types::{Transaction, H256}};
+use std::str::FromStr;
 
-// use crate::{index_extractor::MarketIndexData, HyperLiquidOrderBookData, TestOrderBook};
+use crate::index_extractor::MarketIndexData;
 
-// use super::hyper_liquid_websocket::HyperLiquidWebSocketHandler;
+use super::{hyper_liquid_websocket::{HyperLiquidGlobalMarketDataHandler, HyperLiquidWebSocketHandler}, hyperliquid_orderbook::TestOrderBook};
 
-// // TODO: Imply Metrics and GRPC Connector - to be done with BD when tested
-// pub(crate) struct HyperLiquidApiClient {
-//     pub(crate) exchange_client: ExchangeClient,
-//     pub(crate) info_client: InfoClient,
-//     // Temporary Market Pair
-//     pub(crate) required_market_pair: &'static str,  
-//     pub websocket_handler: HyperLiquidWebSocketHandler
-// }
+// TODO: Imply Metrics and GRPC Connector
+pub(crate) struct HyperLiquidApiClient {
+    pub(crate) exchange_client: ExchangeClient,
+     global_market_handler: Arc<HyperLiquidGlobalMarketDataHandler>,
+    market_id: MarketIndexData
+}
 
-// impl HyperLiquidApiClient {
-//     // Rather than creating a seperate HTTP client we can use the same one created for the InfoClient, how will this work with concurrency?
-//     pub(crate) async fn new( user_wallet: LocalWallet) -> Self {
-//         let client = Client::default();
-//         Self {
-//             // What are the options here and what are they used for
-//             // Open Questions, can we pass in the url as a configurable address for testing
-//             exchange_client: ExchangeClient::new(None, user_wallet, Some(BaseUrl::Testnet), None, None).await.expect("Cannot make exchange client, fail for now, handle errors later"),
-//             info_client: InfoClient::new(Some(client), Some(BaseUrl::Testnet)).await.unwrap(),
-//             required_market_pair: "HYPE_USDC",
-//             websocket_handler: HyperLiquidWebSocketHandler::new()
-//         }
-//     }
+impl HyperLiquidApiClient {
+    // Rather than creating a seperate HTTP client we can use the same one created for the InfoClient, how will this work with concurrency?
+    pub(crate) async fn new(user_wallet: LocalWallet, global_market_handler: &Arc<HyperLiquidGlobalMarketDataHandler>, market_id: &MarketIndexData) -> Self {
+        Self {
+            // TODO: Configurable Address for 
+            exchange_client: ExchangeClient::new(None, user_wallet, Some(BaseUrl::Testnet), None, None).await.expect("Cannot make exchange client, fail for now, handle errors later"),
+            market_id: market_id.clone(),
+            global_market_handler: global_market_handler.clone()
+        }
+    }
+}
 
-//     pub async fn run_and_subscribe_to_info_websocket(&self, required_index: &MarketIndexData){
-//         self.websocket_handler.initialise_websocket();
-//     }
+#[async_trait::async_trait]
+impl MarketBuilder<u64> for HyperLiquidApiClient {
+    async fn fetch_orderbook(&self, params: &MarketBuilderParameters<u64>) -> anyhow::Result<OrderBook> {
+        if let Some(orderbook) = self.global_market_handler.get_orderbook_data_for_market(&self.market_id.market_index) {
+            Ok(OrderBook { bids: OrderBookSide::empty(), asks: OrderBookSide::empty() })
+        } else {
+            return Err(anyhow::Error::msg("Test message for now"));
+        }
+   }
 
-//     pub(super) async fn fetch_market_pair_data(&self, channel_receiver: UnboundedReceiver<Message>) {
-//         while let Some(Message::L2Book(l2_book)) = channel_receiver.recv().await {
-//             // Change to orderbook in connector commons when PR is resolved
-//             // https://gitlab.com/swissborg/defi/connector-commons/-/merge_requests/7
-//             let hyperliquid_order_book = HyperLiquidOrderBookData::try_from(l2_book.data).expect("Add custom error here for failing");
-//             let swissborg_order_book = TestOrderBook::new_from_iter(hyperliquid_order_book.bids, hyperliquid_order_book.asks);
-//             println!("Swissborg model for orderbook: {:?}", swissborg_order_book);
-//         }
-//     }
+    fn market_type(&self) -> MarketType { todo!() }
 
+    fn new_notified(&self) -> Option<Notified> {
+        self.global_market_handler.get_notified_for_market(&self.market_id.market_index)
+    }
+}
 
-// }
+pub(crate) struct HyperLiquidNetwork;
 
-// #[async_trait::async_trait]
-// impl MarketBuilder<u64> for HyperLiquidApiClient {
-//     // Called Periodically, so this should be done prior to build order book stream?
-//     async fn fetch_orderbook(&self, params: &MarketBuilderParameters<u64>) -> anyhow::Result<OrderBook> {
-//         // self.fetch_market_pair_data().await;
-//         Ok(OrderBook { bids: OrderBookSide::empty(), asks: OrderBookSide::empty() })
-//    }
+impl NetworkTypes for HyperLiquidNetwork {
 
-//     fn market_type(&self) -> MarketType { todo!() }
+    type Dex = dex::AvalancheDex;
+    type Address = String;
+    type Signature = String;
+    type Transaction = ClientOrderRequest; 
 
-//     async fn build_orderbook_stream() {
+    const NATIVE_DECIMALS: u8 = 18;
 
-//     }
-    
-// }
-
-// /// A network in this context refers, as you can see this one is called HyperLiquidNetwork
-// /// Example implementation https://gitlab.com/swissborg/defi/evm-connector/-/blob/main/mont-blanc/src/network.rs
-// /// A network must implement the following traits: Network Types
-// pub(crate) struct HyperLiquidNetwork;
-
-// // Open Questions: How do we handle addresses, as we are not referencing markets, we are referencing tokens
-// // TODO: Add these notes to the Network Types Docs
-// impl NetworkTypes for HyperLiquidNetwork {
-//     /// A custom type referring to the DEX being used, this then dictates the rest of the meta information labelled below.
-//     /// TODO: Add HL to Dex Types on Github - done but need to mirror
-//     type Dex = dex::AvalancheDex;
-
-//     /// An address in a blockchain context represents a destination or account where cryptocurrencies can be sent or received. 
-//     /// It's usually derived from a public key and is unique for each user or smart contract.
-//     /// An example of this for EVM based chains are "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
-//     type Address = String;
-
-//     /// A digital signature in blockchain is used to verify the authenticity of transactions. 
-//     /// It is generated when a private key signs a transaction, and it ensures that only the rightful owner can authorize transfers.
-//     /// In Ethereum (using ECDSA, secp256k1 curve), a signature is a 65-byte value containing: 
-//     type Signature = String;
-//     //. A transaction is an action submitted to the blockchain that changes its state (e.g., transferring tokens, executing smart contracts).
-//     /// How a transaction looks can differ from a blockchain, however looking at
-//     type Transaction = ClientOrderRequest;
-//     // With Exchange Client we have the following process Create Exchange Client -> ClientOrderRequest -> Order -> Receive 
-
-//     /// NATIVE_DECIMALS typically refers to the number of decimal places a blockchain's native asset (like ETH, BTC, or SOL) uses for its smallest unit. This value defines how many fractional units make up one whole unit of the currency.
-//     /// BTC uses 8, ETH use 18 and as this will use an EVM then I will also use 18
-//     const NATIVE_DECIMALS: u8 = 18;
-
-//     fn get_transaction_signature(tx: &Self::Transaction) -> &Self::Signature {
-//         // How can the return type be a none reference if I am accessing a reference? Also what is the lifetime of this is reference a part of the input variable?
-//         todo!()
-//     }
-// }
+    fn get_transaction_signature(tx: &Self::Transaction) -> &Self::Signature {
+        // How can the return type be a none reference if I am accessing a reference? Also what is the lifetime of this is reference a part of the input variable?
+        todo!()
+    }
+}
 
 // // Implying the DexTradingAPI
 // // Why, what does this do? 
@@ -216,39 +176,64 @@
 // }
 
 
-// #[cfg(test)]
-// mod tests {
-//     use std::sync::Arc;
+#[cfg(test)]
+mod tests {
+    use crate::__fixtures__::orderbook_fixtures::create_test_fixture;
 
-//     use connector_model::{connector::{market_builder::MarketBuilder, market_type::MarketBuilderParameters}, orderbook::OrderBook};
-//     use ethers::signers::LocalWallet;
-//     use futures::{stream::BoxStream, StreamExt};
+    use super::*;
+    use std::{sync::Arc, time::Duration};
+    use tokio::{sync::{mpsc::unbounded_channel, Mutex}, time::sleep};
 
-//     use crate::HyperLiquidApiClient;
+    use connector_model::{connector::{market_builder::MarketBuilder, market_type::MarketBuilderParameters}, orderbook::OrderBook};
+    use ethers::{signers::LocalWallet, types::H128};
+    use futures::{stream::BoxStream, StreamExt};
 
-    
-// #[tokio::test(flavor = "multi_thread")]
-// async fn fetch_orderbook_hyperliquid_client(){
-//     let wallet: LocalWallet = "e908f86dbb4d55ac876378565aafeabc187f6690f046459397b17d9b9a19688e"
-//         .parse()
-//         .expect("Custom Error message for wallets");
-    
-//     let test_hl_client = HyperLiquidApiClient::new(wallet).await;
-//     let arc_under_test = Arc::new(test_hl_client);
 
     
-//     let mut output_stream: BoxStream<'static, anyhow::Result<OrderBook>> = arc_under_test.build_orderbook_stream(MarketBuilderParameters { orders_limit: 15, convertion_params: None}, 1000, true).await;
-//     let mut orderbook_results: Vec<OrderBook> = Vec::new();
+#[tokio::test(flavor = "multi_thread")]
+// What are the key characteristics do we care abotu testing here?
+async fn fetch_orderbook_hyperliquid_client(){
+    let wallet: LocalWallet = "e908f86dbb4d55ac876378565aafeabc187f6690f046459397b17d9b9a19688e"
+        .parse()
+        .unwrap();
 
-//     for _ in 0..5 {
-//         if let Some(orderbook) = output_stream.next().await {
-//             orderbook_results.push(orderbook.unwrap());
-//         } else {
-//             panic!("Stream did not produce any output!");
-//         }
-//     }
+    let required_index = &MarketIndexData {
+            market_index: "@1035".to_string(),
+            token_id: H128::from_str("0xbaf265ef389da684513d98d68edf4eae").unwrap()
+    };
 
-//     assert_eq!(orderbook_results.len(), 5);
+    // Reused Logic, can this be made into a test fixture
+    // TODO: Looking into providing variable mocked data, or providing a mocked API server so we can pass mocked data through and create deterministic tests
+    let (websocket_handler_under_test, _) = HyperLiquidWebSocketHandler::new().await.unwrap();
+    let (mocked_sender, mocked_receiver) = unbounded_channel();
 
-// }
-// }
+    let global_handler_under_test = HyperLiquidGlobalMarketDataHandler::new(Arc::new(Mutex::new(websocket_handler_under_test)), mocked_receiver).await;
+    let _ = global_handler_under_test.subscribe_to_market(&required_index.market_index).await;
+
+    let mocked_book_data = create_test_fixture();
+
+        tokio::spawn(async move {
+            for _ in 1..=10 {
+                let _ = mocked_sender.send(Message::L2Book(mocked_book_data.clone()));
+                sleep(Duration::from_millis(1000)).await; 
+            }
+    });
+    
+    let hyperliquid_api_client_under_test = Arc::new(HyperLiquidApiClient::new(wallet, &global_handler_under_test, required_index).await);
+
+    
+    let mut output_stream: BoxStream<'static, anyhow::Result<OrderBook>> = hyperliquid_api_client_under_test.build_orderbook_stream(MarketBuilderParameters { orders_limit: 15, convertion_params: None}, 1000, true).await;
+    let mut orderbook_results: Vec<OrderBook> = Vec::new();
+
+    for _ in 0..5 {
+        if let Some(orderbook) = output_stream.next().await {
+            orderbook_results.push(orderbook.unwrap());
+        } else {
+            panic!("Stream did not produce any output!");
+        }
+    }
+
+    assert_eq!(orderbook_results.len(), 5);
+
+}
+}
